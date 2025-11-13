@@ -2,7 +2,14 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-function calculateWorkingHours({ start, end, shiftStart, shiftEnd, saturdayHoliday, generalHolidays }) {
+function calculateWorkingSeconds({
+  start,
+  end,
+  shiftStart,
+  shiftEnd,
+  saturdayHoliday,
+  generalHolidays
+}) {
   const dtStart = new Date(start);
   const dtEnd   = new Date(end);
   const [shH, shM] = shiftStart.split(':').map(x => parseInt(x, 10));
@@ -15,13 +22,11 @@ function calculateWorkingHours({ start, end, shiftStart, shiftEnd, saturdayHolid
 
   let totalMs = 0;
   let cur = new Date(dtStart);
-
-  const oneDay = 24 * 60 * 60 * 1000;
+  const oneDayMs = 24 * 60 * 60 * 1000;
 
   while (cur.toDateString() !== dtEnd.toDateString()) {
-    const curDate = cur.getDate();
     const weekday = cur.getDay(); // Sunday=0, Monday=1,... Saturday=6
-    const isSunday   = (weekday === 0);
+    const isSunday = (weekday === 0);
     const isSaturday = (weekday === 6);
 
     if (!isSunday && !(saturdayHoliday && isSaturday) && !genHols.has(cur.toDateString())) {
@@ -39,11 +44,11 @@ function calculateWorkingHours({ start, end, shiftStart, shiftEnd, saturdayHolid
     }
 
     // next day at midnight
-    cur = new Date(cur.getTime() + oneDay);
+    cur = new Date(cur.getTime() + oneDayMs);
     cur.setHours(0,0,0,0,0);
   }
 
-  // final day (same date as dtEnd)
+  // Handle final day
   const finalDate = dtEnd;
   const weekdayF = finalDate.getDay();
   const isSunF = (weekdayF === 0);
@@ -55,7 +60,7 @@ function calculateWorkingHours({ start, end, shiftStart, shiftEnd, saturdayHolid
     const shiftEndDt   = new Date(finalDate);
     shiftEndDt.setHours(seH, seM, 0, 0);
 
-    const dayStart = dtStart > shiftStartDt && dtStart.toDateString() === finalDate.toDateString()
+    const dayStart = (dtStart.toDateString() === finalDate.toDateString() && dtStart > shiftStartDt)
                      ? dtStart : shiftStartDt;
     const dayEnd   = dtEnd < shiftEndDt ? dtEnd : shiftEndDt;
 
@@ -64,15 +69,16 @@ function calculateWorkingHours({ start, end, shiftStart, shiftEnd, saturdayHolid
     }
   }
 
-  return totalMs / (1000 * 60 * 60);
+  // return seconds (rounded)
+  return Math.round(totalMs / 1000);
 }
 
 app.post('/api/calc', (req, res) => {
   try {
-    const workingHours = calculateWorkingHours(req.body);
-    res.json({ workingHours });
+    const seconds = calculateWorkingSeconds(req.body);
+    res.send(seconds.toString());
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).send(err.message);
   }
 });
 
